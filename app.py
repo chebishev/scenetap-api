@@ -1,7 +1,26 @@
-from fastapi import FastAPI, HTTPException
+import os
+import secrets
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Depends, Header
 from mijiaAPI import mijiaAPI, mijiaDevice
 from devices import PropertySwitchDevice, find_state_property
 from pydantic import BaseModel
+
+load_dotenv()
+API_KEY = os.environ.get("SCENETAP_API_KEY")
+
+if not API_KEY:
+    raise RuntimeError("SCENETAP_API_KEY environment variable is not set")
+
+
+def verify_api_key(x_api_key: str = Header()):
+    if not secrets.compare_digest(x_api_key, API_KEY):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key",
+        )
+
 
 app = FastAPI()
 api = mijiaAPI()
@@ -14,6 +33,7 @@ class DeviceStateRequest(BaseModel):
 @app.get("/")
 def read_root():
     return {"message": "SceneTap API is running"}
+
 
 @app.get("/scenes")
 def get_scenes():
@@ -51,14 +71,67 @@ def get_devices():
             piid=state_property["piid"],
         )
 
-        items.append({
-            "did": item["did"],
-            "name": item["name"],
-            "model": item["model"],
-            "state": device.get_state(),
-        })
+        items.append(
+            {
+                "did": item["did"],
+                "name": item["name"],
+                "model": item["model"],
+                "state": device.get_state(),
+            }
+        )
 
     return {"items": items}
+
+
+@app.post("/scenes/{scene_id}/run")
+def run_scene(scene_id: str):
+    scenes = api.get_scenes_list()
+
+    scene = next(
+        (
+            item
+            for item in scenes
+            if str(item.get("scene_id")) == scene_id and item.get("enable") is True
+        ),
+        None,
+    )
+
+    if scene is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Scene not found or disabled",
+        )
+
+    home_id = scene.get("home_id")
+
+    if home_id is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Scene has no home_id",
+        )
+
+    try:
+        success = api.run_scene(
+            scene_id=scene_id,
+            home_id=str(home_id),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        )
+
+    if not success:
+        raise HTTPException(
+            status_code=502,
+            detail="Scene execution failed",
+        )
+
+    return {
+        "scene_id": scene_id,
+        "name": scene.get("name"),
+        "command_accepted": True,
+    }
 
 
 @app.post("/devices/{did}/state")
@@ -71,14 +144,15 @@ def set_device_state(did: str, request: DeviceStateRequest):
 
     for item in devices:
         print(
-            "Item DID:", repr(item.get("did")),
-            "| Online:", repr(item.get("isOnline")),
+            "Item DID:",
+            repr(item.get("did")),
+            "| Online:",
+            repr(item.get("isOnline")),
             flush=True,
         )
 
         if item["did"] != did or not item.get("isOnline"):
             continue
-
 
         state_property = find_state_property(api, item)
 
@@ -110,18 +184,3 @@ def set_device_state(did: str, request: DeviceStateRequest):
         status_code=404,
         detail="Device not found or offline",
     )
-    
-@app.get("/debug/devices")
-def debug_devices():
-    devices = api.get_devices_list()
-
-    return [
-        {
-            "did": repr(item.get("did")),
-            "did_type": type(item.get("did")).__name__,
-            "name": item.get("name"),
-            "isOnline": item.get("isOnline"),
-        }
-        for item in devices
-    ]
-    
