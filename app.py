@@ -22,7 +22,7 @@ def verify_api_key(x_api_key: str = Header()):
         )
 
 
-app = FastAPI()
+app = FastAPI(dependencies=[Depends(verify_api_key)])
 api = mijiaAPI()
 
 

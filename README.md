@@ -20,6 +20,7 @@ py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
+add .env file with SCENETAP_API_KEY="put-your-superstrong-and-long-random-key"
 
 ## Create/connect a user
 
