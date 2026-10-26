@@ -6,6 +6,8 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from mijiaAPI import mijiaAPI, mijiaDevice
 from devices import PropertySwitchDevice, find_state_property
 from pydantic import BaseModel
+from threading import Thread, Lock
+from mijiaAPI.errors import LoginError
 
 load_dotenv()
 API_KEY = os.environ.get("SCENETAP_API_KEY")
@@ -24,6 +26,12 @@ def verify_api_key(x_api_key: str = Header()):
 
 app = FastAPI(dependencies=[Depends(verify_api_key)])
 api = mijiaAPI()
+login_lock = Lock()
+login_state = {
+    "status": "idle",
+    "content": None,
+    "error": None,
+}
 
 
 class DeviceStateRequest(BaseModel):
@@ -34,6 +42,100 @@ class DeviceStateRequest(BaseModel):
 def read_root():
     return {"message": "SceneTap API is running"}
 
+@app.post("/login/qr")
+def start_qr_login():
+    with login_lock:
+        if login_state["status"] == "waiting_for_scan":
+            return {
+                "status": login_state["status"],
+                "content": login_state["content"],
+            }
+
+        login_state.update({
+            "status": "starting",
+            "content": None,
+            "error": None,
+        })
+
+    try:
+        login_data = api._get_qr_login_data()
+
+        if login_data.get("refreshed"):
+            login_state.update({
+                "status": "authenticated",
+                "content": None,
+                "error": None,
+            })
+            return {"status": "authenticated"}
+
+        login_url = login_data["loginUrl"]
+
+        # Convert QR Code link to normal link in order to be generated QR on the watch
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+        parsed = urlparse(login_data["qr"])
+        query = parse_qs(parsed.query)
+
+        content = urlunparse((
+            "https",
+            "eu.account.xiaomi.com",
+            "/longPolling/login",
+            "",
+            urlencode({
+                "ticket": query["ticket"][0],
+                "dc": query["dc"][0],
+                "sid": query["sid"][0],
+                "ts": query["ts"][0],
+            }),
+            "",
+        ))
+
+        login_state.update({
+            "status": "waiting_for_scan",
+            "content": content,
+            "error": None,
+        })
+
+        def complete_login():
+            try:
+                api._complete_qr_login(login_data)
+                login_state.update({
+                    "status": "authenticated",
+                    "content": None,
+                    "error": None,
+                })
+            except Exception as exc:
+                login_state.update({
+                    "status": "failed",
+                    "content": None,
+                    "error": type(exc).__name__,
+                })
+
+        Thread(target=complete_login, daemon=True).start()
+
+        return {
+            "status": "waiting_for_scan",
+            "content": content,
+        }
+
+    except Exception as exc:
+        login_state.update({
+            "status": "failed",
+            "content": None,
+            "error": type(exc).__name__,
+        })
+        raise HTTPException(
+            status_code=502,
+            detail="Could not start Xiaomi QR login",
+        )
+
+
+@app.get("/login/status")
+def get_login_status():
+    return {
+        "status": login_state["status"],
+        "error": login_state["error"],
+    }
 
 @app.get("/scenes")
 def get_scenes():
