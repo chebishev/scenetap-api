@@ -38,6 +38,7 @@ To connect another person, run the same command with another label and let that 
 
 ```powershell
 python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
+uvicorn app:app --reload
 ```
 
 Open `http://127.0.0.1:8000/docs`. Xiaomi endpoints require `Authorization: Bearer <token>`. `/health` is public and returns no account information.
