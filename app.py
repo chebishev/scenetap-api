@@ -24,7 +24,21 @@ def verify_api_key(x_api_key: str = Header()):
         )
 
 
-app = FastAPI(dependencies=[Depends(verify_api_key)])
+app = FastAPI(
+    title="Scene Tap API",
+    description="Minimal FastAPI backend for Xiaomi Home scenes and devices that are online and expose a `toggle` action.",
+    version="1.0.0",
+    contact={
+        "name": "Atanas Chebishev",
+        "url": "https://chebishev.github.io/",
+        "email": "atanas.chebishev@gmail.com",
+    },
+    license_info={
+        "name": "MIT License",
+        "identifier": "MIT",
+    },
+    dependencies=[Depends(verify_api_key)])
+
 api = mijiaAPI()
 login_lock = Lock()
 login_state = {
@@ -38,12 +52,11 @@ class DeviceStateRequest(BaseModel):
     state: bool
 
 
-@app.get("/")
-def read_root():
-    return {"message": "SceneTap API is running"}
-
-@app.post("/login/qr")
+@app.post("/login/qr", tags=["Get QR login URL"])
 def start_qr_login():
+    """
+    Retrieve and convert the URL that will be used for QR login ot the Zepp app
+    """
     with login_lock:
         if login_state["status"] == "waiting_for_scan":
             return {
@@ -130,14 +143,17 @@ def start_qr_login():
         )
 
 
-@app.get("/login/status")
+@app.get("/login/status", tags=["Check login status"])
 def get_login_status():
+    """
+    Check if the account is already logged in"
+    """
     return {
         "status": login_state["status"],
         "error": login_state["error"],
     }
 
-@app.get("/scenes")
+@app.get("/scenes", tags=["Get all the manual scenes"])
 def get_scenes():
     scenes = api.get_scenes_list()
 
@@ -153,7 +169,7 @@ def get_scenes():
     }
 
 
-@app.get("/devices")
+@app.get("/devices", tags=['Get all online devices, that can be switched on/off'])
 def get_devices():
     items = []
 
@@ -185,7 +201,7 @@ def get_devices():
     return {"items": items}
 
 
-@app.post("/scenes/{scene_id}/run")
+@app.post("/scenes/{scene_id}/run", tags=["Run scene by id"])
 def run_scene(scene_id: str):
     scenes = api.get_scenes_list()
 
@@ -236,7 +252,7 @@ def run_scene(scene_id: str):
     }
 
 
-@app.post("/devices/{did}/state")
+@app.post("/devices/{did}/state", tags=["Change device state by id"])
 def set_device_state(did: str, request: DeviceStateRequest):
     devices = api.get_devices_list()
 
