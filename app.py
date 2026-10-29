@@ -56,7 +56,7 @@ class DeviceStateRequest(BaseModel):
     state: bool
 
 
-@public_router.get("/")
+@public_router.get("/", tags=["Just in case you didn't hit the docs page"])
 def read_root():
     return {"message": "Scene Tap API"}
 
