@@ -2,7 +2,7 @@ import os
 import secrets
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header
 from mijiaAPI import mijiaAPI, mijiaDevice
 from devices import PropertySwitchDevice, find_state_property
 from pydantic import BaseModel
@@ -23,6 +23,11 @@ def verify_api_key(x_api_key: str = Header()):
             detail="Invalid or missing API key",
         )
 
+public_router = APIRouter()
+
+api_router = APIRouter(
+    dependencies=[Depends(verify_api_key)]
+)
 
 app = FastAPI(
     title="Scene Tap API",
@@ -36,8 +41,7 @@ app = FastAPI(
     license_info={
         "name": "MIT License",
         "identifier": "MIT",
-    },
-    dependencies=[Depends(verify_api_key)])
+    })
 
 api = mijiaAPI()
 login_lock = Lock()
@@ -52,7 +56,11 @@ class DeviceStateRequest(BaseModel):
     state: bool
 
 
-@app.post("/login/qr", tags=["Get QR login URL"])
+@public_router.get("/")
+def read_root():
+    return {"message": "Scene Tap API"}
+
+@api_router.post("/login/qr", tags=["Get QR login URL"])
 def start_qr_login():
     """
     Retrieve and convert the URL that will be used for QR login ot the Zepp app
@@ -143,7 +151,7 @@ def start_qr_login():
         )
 
 
-@app.get("/login/status", tags=["Check login status"])
+@api_router.get("/login/status", tags=["Check login status"])
 def get_login_status():
     """
     Check if the account is already logged in"
@@ -153,7 +161,7 @@ def get_login_status():
         "error": login_state["error"],
     }
 
-@app.get("/scenes", tags=["Get all the manual scenes"])
+@api_router.get("/scenes", tags=["Get all the manual scenes"])
 def get_scenes():
     scenes = api.get_scenes_list()
 
@@ -169,7 +177,7 @@ def get_scenes():
     }
 
 
-@app.get("/devices", tags=['Get all online devices, that can be switched on/off'])
+@api_router.get("/devices", tags=['Get all online devices, that can be switched on/off'])
 def get_devices():
     items = []
 
@@ -201,7 +209,7 @@ def get_devices():
     return {"items": items}
 
 
-@app.post("/scenes/{scene_id}/run", tags=["Run scene by id"])
+@api_router.post("/scenes/{scene_id}/run", tags=["Run scene by id"])
 def run_scene(scene_id: str):
     scenes = api.get_scenes_list()
 
@@ -252,7 +260,7 @@ def run_scene(scene_id: str):
     }
 
 
-@app.post("/devices/{did}/state", tags=["Change device state by id"])
+@api_router.post("/devices/{did}/state", tags=["Change device state by id"])
 def set_device_state(did: str, request: DeviceStateRequest):
     devices = api.get_devices_list()
 
@@ -302,3 +310,6 @@ def set_device_state(did: str, request: DeviceStateRequest):
         status_code=404,
         detail="Device not found or offline",
     )
+
+app.include_router(public_router)
+app.include_router(api_router)
