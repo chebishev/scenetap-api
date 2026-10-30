@@ -51,3 +51,8 @@ The final two commands operate real devices/scenes. Use them only when ready.
 - The library resolves `mijiaDevice` via device name in the verified code path. To avoid controlling the wrong device, this prototype omits duplicate online device names and rejects their toggle requests.
 - On the tested version, `mijiaDevice.run_action("toggle")` returns `None` while successfully switching the device; the API therefore returns an acknowledgment only when no exception occurred.
 - Each user gets a separate auth file. Never commit or share `data/`.
+
+## Screenshots
+
+![Image](./screenshots/Screenshot%202026-10-30%20083554.png)
+![Image](./screenshots/Screenshot%202026-10-30%20085757.png)
