@@ -47,21 +47,28 @@ class PropertySwitchDevice:
         return self.set_state(False)
 
 
-from mijiaAPI import mijiaDevice
+from mijiaAPI import get_device_info
+from mijiaAPI.devices import DevProp
 
 
 def find_state_property(api, item):
-    device = mijiaDevice(api, dev_name=item["name"])
+    
+    dev_info = get_device_info(
+        item["spec_type"],
+        cache_path=api.auth_data_path.parent,
+    )
 
-    if item["model"] == "chuangmi.plug.m1":
-        prop = device.prop_list.get("on-2")
-    else:
-        prop = device.prop_list.get("on")
+    for prop_data in dev_info.get("properties", []):
+        prop = DevProp(prop_data)
 
-    if prop is None:
-        return None
+        expected_name = (
+            "on-2"
+            if item["model"] == "chuangmi.plug.m1"
+            else "on"
+        )
 
-    if prop.type != "bool" or prop.rw != "rw":
-        return None
+        if prop.name == expected_name:
+            if prop.type == "bool" and prop.rw == "rw":
+                return prop.method
 
-    return prop.method
+    return None

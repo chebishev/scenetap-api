@@ -58,7 +58,7 @@ class DeviceStateRequest(BaseModel):
 
 @public_router.get("/", tags=["Just in case you didn't hit the docs page"])
 def read_root():
-    return {"message": "Scene Tap API"}
+    return {"message": "Scene Tap API up and running"}
 
 @api_router.post("/login/qr", tags=["Get QR login URL"])
 def start_qr_login():
@@ -211,6 +211,9 @@ def get_devices():
 
 @api_router.post("/scenes/{scene_id}/run", tags=["Run scene by id"])
 def run_scene(scene_id: str):
+    """
+    Retrieve "scene_id" from scenes endpoint first
+    """
     scenes = api.get_scenes_list()
 
     scene = next(
@@ -262,20 +265,12 @@ def run_scene(scene_id: str):
 
 @api_router.post("/devices/{did}/state", tags=["Change device state by id"])
 def set_device_state(did: str, request: DeviceStateRequest):
+    """
+    Retrieve "did" from devices endpoint first
+    """
     devices = api.get_devices_list()
 
-    print("SET_DEVICE_STATE reached", flush=True)
-    print("Requested DID:", repr(did), flush=True)
-    print("Devices count:", len(devices), flush=True)
-
     for item in devices:
-        print(
-            "Item DID:",
-            repr(item.get("did")),
-            "| Online:",
-            repr(item.get("isOnline")),
-            flush=True,
-        )
 
         if item["did"] != did or not item.get("isOnline"):
             continue
